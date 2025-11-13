@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Laboratorio — Vulnerable vs Seguro (Flask)</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header>
+  <div class="wrap header-content">
+    <div class="brand">🛡️ Laboratorio de Seguridad Web</div>
+    <nav>
+      <a href="/vuln" class="pill small pill-danger" id="navVuln">
+        <span class="icon">⚠️</span> Versión VULNERABLE
+      </a>
+      <a href="/safe" class="pill small pill-success" id="navSafe">
+        <span class="icon">✅</span> Versión SEGURA
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- Hero Section -->
+  <section class="hero-card card">
+    <div class="grid cols-2">
+      <div>
+        <h1 id="modeTitle" class="mode-title"></h1>
+        <div id="modeBadge" class="mode-badge"></div>
+        <p class="hero-description">
+          Este laboratorio educativo te permite experimentar con <strong>vulnerabilidades reales</strong> 
+          y comparar implementaciones inseguras vs seguras basadas en el <strong>OWASP Top 10</strong>.
+        </p>
+        <div class="info-box" id="modeInfo">
+          <div class="info-icon">💡</div>
+          <div class="info-content">
+            <strong>Objetivo:</strong> Aprende a identificar y prevenir vulnerabilidades web comunes 
+            interactuando con código real en un entorno controlado.
+          </div>
+        </div>
+      </div>
+      <div class="status-card card-inner">
+        <h3>📊 Estado de la Sesión</h3>
+        <div id="status" class="status-content"></div>
+        <div id="sessionInfo" class="session-info"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Guide -->
+  <section class="card guide-card" id="quickGuide">
+    <div class="guide-header" onclick="toggleGuide()">
+      <h2>📚 Guía Rápida de Explotación</h2>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="guide-content" id="guideContent">
+      <div class="grid cols-2">
+        <div class="exploit-tip">
+          <span class="tip-icon">🔓</span>
+          <strong>SQL Injection:</strong> Prueba <code>' OR '1'='1' --</code> en login
+        </div>
+        <div class="exploit-tip">
+          <span class="tip-icon">🚨</span>
+          <strong>XSS Reflejado:</strong> <code>&lt;img src=x onerror=alert(1)&gt;</code>
+        </div>
+        <div class="exploit-tip">
+          <span class="tip-icon">💉</span>
+          <strong>XSS Almacenado:</strong> Inyecta HTML en comentarios
+        </div>
+        <div class="exploit-tip">
+          <span class="tip-icon">📂</span>
+          <strong>Path Traversal:</strong> Intenta <code>../app.py</code>
+        </div>
+        <div class="exploit-tip">
+          <span class="tip-icon">🔑</span>
+          <strong>IDOR:</strong> Accede a perfiles ajenos con <code>id=1</code>
+        </div>
+        <div class="exploit-tip">
+          <span class="tip-icon">🛡️</span>
+          <strong>Credenciales:</strong> admin / luna2001 o alice / alice123
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Login Section -->
+  <section class="card vulnerability-card">
+    <div class="vuln-header">
+      <div>
+        <h2>🔐 Autenticación y Login</h2>
+        <div class="owasp-badges">
+          <span class="owasp-badge">OWASP A03:2021 - Injection</span>
+          <span class="owasp-badge">OWASP A07:2021 - Identification Failures</span>
+        </div>
+      </div>
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab('login', 'explain')">📖 Ver Explicación</button>
+        <button class="tab-btn" onclick="switchTab('login', 'code')">💻 Ver Código</button>
+      </div>
+    </div>
+    
+    <div class="explanation-panel" id="loginExplain" style="display:none;">
+      <div class="tab-content active" data-tab="explain">
+        <div class="explanation-content">
+          <div class="grid cols-2">
+            <div class="explain-box explain-vulnerable">
+              <h4>❌ Versión Vulnerable</h4>
+              <ul>
+                <li><strong>SQL Injection:</strong> Concatena directamente el input del usuario en la query SQL</li>
+                <li><strong>Contraseñas en texto plano:</strong> Almacenadas sin hash en la BD</li>
+                <li><strong>Sin rate limiting:</strong> Permite ataques de fuerza bruta</li>
+                <li><strong>Cookies inseguras:</strong> Sin HttpOnly, Secure ni SameSite</li>
+              </ul>
+              <div class="code-preview">
+                <code>sql = f"SELECT * FROM users WHERE user='{user}' AND pass='{pw}'"</code>
+              </div>
+            </div>
+            <div class="explain-box explain-secure">
+              <h4>✅ Versión Segura</h4>
+              <ul>
+                <li><strong>Consultas preparadas:</strong> Usa parámetros para prevenir SQLi</li>
+                <li><strong>Argon2:</strong> Hash robusto para contraseñas</li>
+                <li><strong>Rate limiting:</strong> Limita intentos de login (10/5min)</li>
+                <li><strong>Cookies seguras:</strong> HttpOnly + Secure + SameSite=Strict</li>
+              </ul>
+              <div class="code-preview">
+                <code>query_one("SELECT * FROM users WHERE user=?", (user,))</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="code" style="display:none;">
+        <div class="code-comparison-full">
+          <div class="code-column">
+            <div class="code-header code-header-vulnerable">
+              <span>❌ Código Vulnerable</span>
+              <span class="code-badge">SQL Injection + Plain Text Passwords</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># 🚨 VULNERABLE - SQL Injection + Insecure Auth
+@app.post("/api/vuln/login")
+def api_vuln_login():
+    user = request.json.get("user")
+    pw = request.json.get("pass")
+    
+    # ❌ SQL INJECTION: String concatenation
+    sql = f"SELECT * FROM users WHERE user='{user}' AND pass='{pw}'"
+    u = query_one(sql)
+    
+    if not u:
+        return {"success": False, "msg": "Credenciales inválidas"}
+    
+    # ❌ Cookie insegura (sin HttpOnly, Secure, SameSite)
+    resp = jsonify({
+        "success": True,
+        "user": u["user"],
+        "msg": f"Bienvenido {u['user']}!"
+    })
+    resp.set_cookie("session", u["user"])  # ❌ Insecure!
+    return resp
+
+# 📊 Base de datos - Contraseñas en texto plano
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    user TEXT UNIQUE,
+    pass TEXT,  -- ❌ Sin hash!
+    role TEXT
+);</code></pre>
+          </div>
+          
+          <div class="code-column">
+            <div class="code-header code-header-secure">
+              <span>✅ Código Seguro</span>
+              <span class="code-badge">Prepared Statements + Argon2 Hash</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># ✅ SEGURO - Prepared Statements + Secure Auth
+@app.post("/api/safe/login")
+@limiter.limit("10 per 5 minutes")  # ✅ Rate limiting
+def api_safe_login():
+    user = request.json.get("user")
+    pw = request.json.get("pass")
+    
+    # ✅ Consulta preparada - Previene SQL Injection
+    u = query_one("SELECT * FROM users WHERE user=?", (user,))
+    
+    if not u:
+        return {"success": False, "msg": "Credenciales inválidas"}
+    
+    # ✅ Verifica hash Argon2
+    if not ph.verify(u["pass"], pw):
+        return {"success": False, "msg": "Credenciales inválidas"}
+    
+    # ✅ Cookie segura
+    resp = jsonify({
+        "success": True,
+        "user": u["user"],
+        "msg": f"Bienvenido {u['user']}!"
+    })
+    resp.set_cookie(
+        "session", u["user"],
+        httponly=True,   # ✅ No accesible desde JS
+        secure=True,     # ✅ Solo HTTPS
+        samesite="Strict" # ✅ CSRF protection
+    )
+    return resp</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="grid cols-2">
+        <label class="input-label">
+          <span>👤 Usuario</span>
+          <input id="user" placeholder="Ej: admin o ' OR '1'='1' --">
+        </label>
+        <label class="input-label">
+          <span>🔑 Contraseña</span>
+          <input id="pass" type="password" placeholder="Ej: luna2001">
+        </label>
+      </div>
+      <div class="button-row">
+        <button id="btnLogin" class="btn-primary">🚀 Intentar Login</button>
+      </div>
+      <div id="loginResult" class="result-box"></div>
+      <pre id="sqlPreview" class="sql-preview"></pre>
+    </div>
+  </section>
+
+  <!-- Search/XSS Section -->
+  <section class="card vulnerability-card">
+    <div class="vuln-header">
+      <div>
+        <h2>🔍 Buscador Web</h2>
+        <div class="owasp-badges">
+          <span class="owasp-badge">OWASP A03:2021 - Injection (XSS)</span>
+        </div>
+      </div>
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab('search', 'explain')">📖 Ver Explicación</button>
+        <button class="tab-btn" onclick="switchTab('search', 'code')">💻 Ver Código</button>
+      </div>
+    </div>
+    
+    <div class="explanation-panel" id="searchExplain" style="display:none;">
+      <div class="tab-content active" data-tab="explain">
+        <div class="explanation-content">
+          <div class="grid cols-2">
+            <div class="explain-box explain-vulnerable">
+              <h4>❌ Versión Vulnerable</h4>
+              <ul>
+                <li><strong>XSS Reflejado:</strong> Devuelve HTML sin escapar el input del usuario</li>
+                <li><strong>Sin CSP:</strong> No hay Content Security Policy</li>
+                <li><strong>Ejecución de scripts:</strong> Permite inyectar JavaScript arbitrario</li>
+              </ul>
+              <div class="code-preview">
+                <code>html_resp = f"&lt;div&gt;{q}&lt;/div&gt;"  # ❌ Sin escapar</code>
+              </div>
+            </div>
+            <div class="explain-box explain-secure">
+              <h4>✅ Versión Segura</h4>
+              <ul>
+                <li><strong>Escapado HTML:</strong> Usa <code>html.escape()</code> para sanitizar</li>
+                <li><strong>CSP restrictiva:</strong> Política que previene scripts inline</li>
+                <li><strong>Defensa en profundidad:</strong> Múltiples capas de protección</li>
+              </ul>
+              <div class="code-preview">
+                <code>safe_q = htmllib.escape(q)  # ✅ Sanitizado</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="code" style="display:none;">
+        <div class="code-comparison-full">
+          <div class="code-column">
+            <div class="code-header code-header-vulnerable">
+              <span>❌ Código Vulnerable</span>
+              <span class="code-badge">Reflected XSS</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># 🚨 VULNERABLE - XSS Reflejado
+@app.get("/api/vuln/search")
+def api_vuln_search():
+    q = request.args.get("q", "")
+    
+    # ❌ Devuelve HTML sin escapar - XSS!
+    html_resp = f"""
+    &lt;div class='search-result'&gt;
+      &lt;h3&gt;Resultados para: {q}&lt;/h3&gt;
+      &lt;p&gt;Tu búsqueda: {q}&lt;/p&gt;
+    &lt;/div&gt;
+    """
+    
+    # ❌ Sin Content-Security-Policy
+    return html_resp
+
+# Ejemplo de ataque:
+# /api/vuln/search?q=&lt;img src=x onerror=alert('XSS')&gt;
+# El script se ejecuta en el navegador de la víctima</code></pre>
+          </div>
+          
+          <div class="code-column">
+            <div class="code-header code-header-secure">
+              <span>✅ Código Seguro</span>
+              <span class="code-badge">HTML Escaped + CSP</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># ✅ SEGURO - XSS Prevenido
+import html as htmllib
+
+@app.get("/api/safe/search")
+def api_safe_search():
+    q = request.args.get("q", "")
+    
+    # ✅ Escapa caracteres HTML peligrosos
+    safe_q = htmllib.escape(q)
+    
+    html_resp = f"""
+    &lt;div class='search-result'&gt;
+      &lt;h3&gt;Resultados para: {safe_q}&lt;/h3&gt;
+      &lt;p&gt;Tu búsqueda: {safe_q}&lt;/p&gt;
+    &lt;/div&gt;
+    """
+    
+    # ✅ Content-Security-Policy restrictiva
+    resp = Response(html_resp)
+    resp.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'"
+    )
+    return resp</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="search-box">
+        <input id="q" placeholder="🔎 Prueba: &lt;img src=x onerror=alert('XSS')&gt; o &lt;script&gt;alert(1)&lt;/script&gt;">
+        <button id="btnSearch" class="btn-primary">Buscar</button>
+      </div>
+      <div id="searchOut" class="result-display"></div>
+    </div>
+  </section>
+
+  <!-- Comments Section -->
+  <section class="card vulnerability-card">
+    <div class="vuln-header">
+      <div>
+        <h2>💬 Sistema de Comentarios</h2>
+        <div class="owasp-badges">
+          <span class="owasp-badge">OWASP A03:2021 - Injection (XSS Almacenado)</span>
+          <span class="owasp-badge">OWASP A01:2021 - Broken Access Control (CSRF)</span>
+        </div>
+      </div>
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab('comments', 'explain')">📖 Ver Explicación</button>
+        <button class="tab-btn" onclick="switchTab('comments', 'code')">💻 Ver Código</button>
+      </div>
+    </div>
+    
+    <div class="explanation-panel" id="commentsExplain" style="display:none;">
+      <div class="tab-content active" data-tab="explain">
+        <div class="explanation-content">
+          <div class="grid cols-2">
+            <div class="explain-box explain-vulnerable">
+              <h4>❌ Versión Vulnerable</h4>
+              <ul>
+                <li><strong>XSS Almacenado:</strong> Guarda HTML sin sanitizar en BD</li>
+                <li><strong>Sin CSRF Token:</strong> Permite ataques Cross-Site Request Forgery</li>
+                <li><strong>Sin autenticación:</strong> Cualquiera puede comentar</li>
+                <li><strong>Sin validación:</strong> Acepta cualquier longitud/contenido</li>
+              </ul>
+              <div class="attack-example">
+                💡 <strong>Prueba:</strong> <code>&lt;img src=x onerror=alert('Persistente')&gt;</code>
+              </div>
+            </div>
+            <div class="explain-box explain-secure">
+              <h4>✅ Versión Segura</h4>
+              <ul>
+                <li><strong>Almacena texto plano:</strong> Solo guarda contenido sin HTML</li>
+                <li><strong>CSRF Token:</strong> Valida token único por sesión</li>
+                <li><strong>Requiere autenticación:</strong> Solo usuarios logueados</li>
+                <li><strong>Límite de caracteres:</strong> Máximo 500 caracteres</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="code" style="display:none;">
+        <div class="code-comparison-full">
+          <div class="code-column">
+            <div class="code-header code-header-vulnerable">
+              <span>❌ Código Vulnerable</span>
+              <span class="code-badge">Stored XSS + No CSRF Protection</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># 🚨 VULNERABLE - XSS Almacenado + Sin CSRF
+@app.post("/api/vuln/comments")
+def api_vuln_comments():
+    txt = request.json.get("text")
+    
+    # ❌ Guarda HTML directamente sin sanitizar
+    query_exec(
+        "INSERT INTO comments (text) VALUES (?)", 
+        (txt,)
+    )
+    
+    # ❌ Sin validación de token CSRF
+    # ❌ Sin autenticación requerida
+    # ❌ Sin límite de longitud
+    
+    return {"success": True}
+
+# Al listar comentarios:
+@app.get("/api/vuln/comments")
+def get_vuln_comments():
+    comments = query_all("SELECT * FROM comments")
+    # ❌ Devuelve HTML directamente - Se ejecuta XSS
+    return {"comments": comments}</code></pre>
+          </div>
+          
+          <div class="code-column">
+            <div class="code-header code-header-secure">
+              <span>✅ Código Seguro</span>
+              <span class="code-badge">Sanitized + CSRF Tokens</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># ✅ SEGURO - Texto Plano + CSRF Protection
+@app.post("/api/safe/comments")
+@limiter.limit("5 per minute")
+def api_safe_comments():
+    # ✅ Verifica token CSRF
+    token = request.headers.get("x-csrf-token")
+    if token != session.get("csrf_token"):
+        return {"success": False, "msg": "CSRF token inválido"}, 403
+    
+    # ✅ Requiere autenticación
+    if "user" not in session:
+        return {"success": False, "msg": "Login requerido"}, 401
+    
+    txt = request.json.get("text", "")
+    
+    # ✅ Validación de longitud
+    if len(txt) > 500:
+        return {"success": False, "msg": "Máximo 500 caracteres"}, 400
+    
+    # ✅ Guarda solo texto plano (no HTML)
+    query_exec(
+        "INSERT INTO comments (text, author) VALUES (?, ?)", 
+        (txt, session["user"])
+    )
+    
+    return {"success": True}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="comment-input-box">
+        <input id="cText" placeholder="💭 Escribe tu comentario (en modo vulnerable, prueba inyectar HTML...)">
+        <button id="btnComment" class="btn-primary">📤 Publicar</button>
+      </div>
+      <div id="commentsResult" class="result-box"></div>
+      <div class="comments-container">
+        <h3 class="section-subtitle">📝 Comentarios Recientes</h3>
+        <ol id="cList" class="comments-list"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- File Upload Section -->
+  <section class="card vulnerability-card">
+    <div class="vuln-header">
+      <div>
+        <h2>📤 Subida de Archivos</h2>
+        <div class="owasp-badges">
+          <span class="owasp-badge">OWASP A03:2021 - Injection</span>
+          <span class="owasp-badge">OWASP A04:2021 - Insecure Design</span>
+        </div>
+      </div>
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab('upload', 'explain')">📖 Ver Explicación</button>
+        <button class="tab-btn" onclick="switchTab('upload', 'code')">💻 Ver Código</button>
+      </div>
+    </div>
+    
+    <div class="explanation-panel" id="uploadExplain" style="display:none;">
+      <div class="tab-content active" data-tab="explain">
+        <div class="explanation-content">
+          <div class="grid cols-2">
+            <div class="explain-box explain-vulnerable">
+              <h4>❌ Versión Vulnerable</h4>
+              <ul>
+                <li><strong>Sin validación de tipo:</strong> Permite .php, .exe, .sh y otros ejecutables</li>
+                <li><strong>Sin límite de tamaño:</strong> Permite archivos enormes (DoS)</li>
+                <li><strong>Nombre sin sanitizar:</strong> Usa nombre original sin validar</li>
+                <li><strong>Sobrescritura:</strong> Puede sobrescribir archivos existentes</li>
+                <li><strong>Sin verificación de contenido:</strong> No verifica magic bytes</li>
+              </ul>
+              <div class="attack-example">
+                💡 <strong>Prueba:</strong> Subir <code>shell.php</code> o <code>malware.exe</code>
+              </div>
+            </div>
+            <div class="explain-box explain-secure">
+              <h4>✅ Versión Segura</h4>
+              <ul>
+                <li><strong>Whitelist de extensiones:</strong> Solo .txt, .pdf, .jpg, .png, .gif</li>
+                <li><strong>Límite de tamaño:</strong> Máximo 5MB</li>
+                <li><strong>Nombre aleatorio (UUID):</strong> Previene colisiones</li>
+                <li><strong>Requiere autenticación:</strong> Solo usuarios logueados</li>
+                <li><strong>Validación de contenido:</strong> Verifica magic bytes</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="code" style="display:none;">
+        <div class="code-comparison-full">
+          <div class="code-column">
+            <div class="code-header code-header-vulnerable">
+              <span>❌ Código Vulnerable</span>
+              <span class="code-badge">No File Validation</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># 🚨 VULNERABLE - File Upload sin restricciones
+@app.post("/api/vuln/upload")
+def api_vuln_upload():
+    file = request.files['file']
+    
+    # ❌ Usa nombre original - permite path traversal
+    # ❌ Sin validación de extensión
+    # ❌ Sin límite de tamaño
+    # ❌ Sin verificar contenido real del archivo
+    
+    filepath = os.path.join(UPLOAD_DIR, file.filename)
+    file.save(filepath)
+    
+    return {"success": True, "filename": file.filename}
+
+# Ataques posibles:
+# - Subir shell.php y ejecutarlo
+# - Subir ../../../system/config.txt (path traversal)
+# - Subir archivo de 10GB (DoS)
+# - Subir malware.exe disfrazado de imagen.jpg</code></pre>
+          </div>
+          
+          <div class="code-column">
+            <div class="code-header code-header-secure">
+              <span>✅ Código Seguro</span>
+              <span class="code-badge">Whitelist + UUID + Size Limit</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># ✅ SEGURO - File Upload con validaciones múltiples
+import secrets
+import os
+
+ALLOWED_EXTENSIONS = {'.jpg', '.png', '.gif', '.pdf', '.txt'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+@app.post("/api/safe/upload")
+@limiter.limit("10 per hour")
+def api_safe_upload():
+    # ✅ Requiere autenticación
+    if "user" not in session:
+        return {"success": False, "msg": "Login requerido"}, 401
+    
+    file = request.files['file']
+    
+    # ✅ Valida tamaño
+    file.seek(0, os.SEEK_END)
+    if file.tell() > MAX_FILE_SIZE:
+        return {"success": False, "msg": "Archivo muy grande"}, 400
+    file.seek(0)
+    
+    # ✅ Valida extensión (whitelist)
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return {"success": False, "msg": "Tipo no permitido"}, 400
+    
+    # ✅ Nombre aleatorio con UUID (previene colisiones)
+    safe_filename = f"{secrets.token_urlsafe(16)}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, safe_filename)
+    
+    file.save(filepath)
+    return {"success": True, "filename": safe_filename}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="guide-tip" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, rgba(255, 204, 77, 0.1), rgba(255, 204, 77, 0.05)); border: 1px solid rgba(255, 204, 77, 0.3); border-radius: 12px;">
+        <h4 style="color: var(--warning); margin: 0 0 8px 0;">💡 Guía Rápida</h4>
+        <p style="margin: 0; color: var(--muted); font-size: 0.9rem;">
+          <strong>En modo VULNERABLE:</strong> Intenta subir archivos .php, .exe o muy grandes. Se aceptarán sin validación.<br>
+          <strong>En modo SEGURO:</strong> Solo se permitirán .txt, .pdf, .jpg, .png, .gif (máx 5MB) y se renombrarán con UUID.
+        </p>
+      </div>
+      
+      <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon" style="font-size: 3rem; margin-bottom: 12px;">📎</div>
+        <input type="file" id="fileInput" class="file-input" style="display: none;">
+        <div><strong>Haz clic para seleccionar archivo</strong></div>
+        <div class="upload-info">o arrastra y suelta aquí</div>
+      </div>
+      <button id="btnUpload" class="btn-primary" style="margin-top: 12px; width: 100%;">📤 Subir Archivo</button>
+      <div id="uploadResult" class="result-box"></div>
+      <div class="uploads-list">
+        <h3 class="section-subtitle">📁 Archivos Subidos</h3>
+        <div id="uploadsList" class="files-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SSRF Section -->
+  <section class="card vulnerability-card">
+    <div class="vuln-header">
+      <div>
+        <h2>🌐 Server-Side Request Forgery (SSRF)</h2>
+        <div class="owasp-badges">
+          <span class="owasp-badge">OWASP A01:2021 - Broken Access Control</span>
+          <span class="owasp-badge">OWASP A10:2021 - SSRF</span>
+        </div>
+      </div>
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab('ssrf', 'explain')">📖 Ver Explicación</button>
+        <button class="tab-btn" onclick="switchTab('ssrf', 'code')">💻 Ver Código</button>
+      </div>
+    </div>
+    
+    <div class="explanation-panel" id="ssrfExplain" style="display:none;">
+      <div class="tab-content active" data-tab="explain">
+        <div class="explanation-content">
+          <div class="grid cols-2">
+            <div class="explain-box explain-vulnerable">
+              <h4>❌ Versión Vulnerable</h4>
+              <ul>
+                <li><strong>SSRF:</strong> El servidor hace peticiones a URLs arbitrarias sin validación</li>
+                <li><strong>Acceso a localhost:</strong> Permite acceder a servicios internos (127.0.0.1)</li>
+                <li><strong>Port scanning:</strong> Descubrir puertos abiertos internamente</li>
+                <li><strong>Cloud metadata:</strong> Acceso a 169.254.169.254 (AWS, Azure, GCP)</li>
+                <li><strong>Sin whitelist:</strong> Acepta cualquier URL, incluso file://, gopher://</li>
+                <li><strong>Información sensible:</strong> Lee archivos internos, APIs privadas</li>
+              </ul>
+              <div class="attack-example">
+                💡 <strong>Ejemplos de ataque:</strong><br>
+                • <code>http://localhost:5000/api/vuln/code?file=app.py</code><br>
+                • <code>http://127.0.0.1:8080/admin</code><br>
+                • <code>http://169.254.169.254/latest/meta-data/</code> (AWS metadata)<br>
+                • <code>file:///etc/passwd</code> (lectura de archivos locales)
+              </div>
+            </div>
+            <div class="explain-box explain-secure">
+              <h4>✅ Versión Segura</h4>
+              <ul>
+                <li><strong>Whitelist de dominios:</strong> Solo dominios específicamente permitidos</li>
+                <li><strong>Validación de esquema:</strong> Solo http/https (no file://, gopher://)</li>
+                <li><strong>Bloqueo de IPs privadas:</strong> Rechaza 127.0.0.1, 10.0.0.0/8, 192.168.0.0/16</li>
+                <li><strong>Bloqueo de localhost:</strong> Previene acceso a servicios internos</li>
+                <li><strong>Timeout corto:</strong> Evita DoS por peticiones lentas</li>
+                <li><strong>Rate limiting:</strong> 10 peticiones/minuto máximo</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="code" style="display:none;">
+        <div class="code-comparison-full">
+          <div class="code-column">
+            <div class="code-header code-header-vulnerable">
+              <span>❌ Código Vulnerable</span>
+              <span class="code-badge">No URL Validation</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># 🚨 VULNERABLE - SSRF sin validación
+@app.post("/api/vuln/fetch")
+def api_vuln_fetch():
+    data = request.json
+    url = data.get('url')
+    
+    # ❌ Sin validación de URL
+    # ❌ Permite cualquier esquema (file://, http://)
+    # ❌ Permite acceso a localhost/IPs privadas
+    # ❌ Sin whitelist de dominios
+    
+    try:
+        response = urllib.request.urlopen(url, timeout=5)
+        content = response.read().decode('utf-8')
+        
+        return {
+            "ok": True,
+            "content": content[:1000]
+        }
+    except Exception as e:
+        return {"error": str(e)}, 400
+
+# Ataques posibles:
+# {"url": "http://localhost:5000/api/vuln/code?file=app.py"}
+# {"url": "http://127.0.0.1:6379"}  # Redis interno
+# {"url": "http://169.254.169.254/latest/meta-data/"}
+# {"url": "file:///etc/passwd"}</code></pre>
+          </div>
+          
+          <div class="code-column">
+            <div class="code-header code-header-secure">
+              <span>✅ Código Seguro</span>
+              <span class="code-badge">Whitelist + IP Validation</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># ✅ SEGURO - Whitelist + Validación de IPs
+@app.post("/api/safe/fetch")
+@limiter.limit("10 per minute")
+def api_safe_fetch():
+    data = request.json
+    url = data.get('url')
+    
+    # ✅ Validar esquema (solo http/https)
+    parsed = urlparse(url)
+    if parsed.scheme not in ['http', 'https']:
+        return {"error": "Solo http/https permitido"}, 400
+    
+    # ✅ WHITELIST de dominios permitidos
+    ALLOWED = ['example.com', 'httpbin.org', 
+               'jsonplaceholder.typicode.com']
+    if not any(parsed.netloc.endswith(d) for d in ALLOWED):
+        return {"error": "Dominio no permitido"}, 403
+    
+    # ✅ Validar que no sea IP privada/localhost
+    try:
+        ip = socket.gethostbyname(parsed.netloc)
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_loopback:
+            return {"error": "IP privada bloqueada"}, 403
+    except:
+        pass
+    
+    try:
+        response = urllib.request.urlopen(url, timeout=3)
+        content = response.read().decode('utf-8')
+        return {"ok": True, "content": content[:500]}
+    except:
+        return {"error": "Error en petición"}, 400</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="api-form">
+        <div class="input-label">
+          <span>🌐 URL a obtener</span>
+          <input id="ssrfUrl" placeholder="https://jsonplaceholder.typicode.com/posts/1">
+        </div>
+        <button id="btnFetchUrl" class="btn-primary">🔍 Obtener Contenido</button>
+      </div>
+      <div id="ssrfResult" class="result-box"></div>
+    </div>
+  </section>
+
+  <!-- Code Viewer Section -->
+  <section class="card vulnerability-card">
+    <div class="vuln-header">
+      <div>
+        <h2>🔬 Visor de Código Fuente</h2>
+        <div class="owasp-badges">
+          <span class="owasp-badge">OWASP A05:2021 - Security Misconfiguration</span>
+        </div>
+      </div>
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab('codeview', 'explain')">📖 Ver Explicación</button>
+        <button class="tab-btn" onclick="switchTab('codeview', 'code')">💻 Ver Código</button>
+      </div>
+    </div>
+    
+    <div class="explanation-panel" id="codeviewExplain" style="display:none;">
+      <div class="tab-content active" data-tab="explain">
+        <div class="explanation-content">
+          <div class="grid cols-2">
+            <div class="explain-box explain-vulnerable">
+              <h4>❌ Versión Vulnerable</h4>
+              <ul>
+                <li><strong>Exposición de código:</strong> Permite leer cualquier archivo del servidor</li>
+                <li><strong>Sin whitelist:</strong> No valida qué archivos se pueden leer</li>
+                <li><strong>Fuga de información:</strong> Expone lógica de negocio y configuraciones</li>
+                <li><strong>Endpoints de debug:</strong> Expuestos en producción</li>
+              </ul>
+            </div>
+            <div class="explain-box explain-secure">
+              <h4>✅ Versión Segura</h4>
+              <ul>
+                <li><strong>Whitelist estricta:</strong> Solo archivos específicamente permitidos</li>
+                <li><strong>Solo para demo:</strong> Este endpoint solo debería existir en desarrollo</li>
+                <li><strong>Principio de mínima exposición:</strong> Ocultar detalles de implementación</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="code" style="display:none;">
+        <div class="code-comparison-full">
+          <div class="code-column">
+            <div class="code-header code-header-vulnerable">
+              <span>❌ Código Vulnerable</span>
+              <span class="code-badge">Arbitrary File Read</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># 🚨 VULNERABLE - Lee cualquier archivo
+@app.get("/api/vuln/code")
+def api_vuln_code():
+    file = request.args.get("file")
+    
+    # ❌ Sin validación de whitelist
+    # ❌ Puede leer archivos sensibles
+    try:
+        with open(file, 'r') as f:
+            content = f.read()
+        return {"code": content}
+    except:
+        return {"code": "Error"}
+
+# Ataques posibles:
+# /api/vuln/code?file=/etc/passwd
+# /api/vuln/code?file=config.json
+# /api/vuln/code?file=.env</code></pre>
+          </div>
+          
+          <div class="code-column">
+            <div class="code-header code-header-secure">
+              <span>✅ Código Seguro</span>
+              <span class="code-badge">Whitelist Only</span>
+            </div>
+            <pre class="code-display"><code class="language-python"># ✅ SEGURO - Whitelist de archivos permitidos
+ALLOWED_FILES = {
+    "app.py",
+    "static/app.js",
+    "static/styles.css",
+    "templates/index.html"
+}
+
+@app.get("/api/safe/code")
+def api_safe_code():
+    file = request.args.get("file")
+    
+    # ✅ Solo archivos en whitelist
+    if file not in ALLOWED_FILES:
+        return {"error": "Archivo no permitido"}, 403
+    
+    # ✅ En producción, este endpoint NO debería existir
+    try:
+        with open(file, 'r') as f:
+            content = f.read()
+        return {"code": content}
+    except:
+        return {"error": "No encontrado"}, 404</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="code-selector">
+        <select id="codeFile" class="select-file">
+          <option value="app.py">📄 app.py - Backend principal</option>
+          <option value="templates/index.html">🌐 templates/index.html - Frontend</option>
+          <option value="static/app.js">⚙️ static/app.js - JavaScript</option>
+          <option value="static/styles.css">🎨 static/styles.css - Estilos</option>
+        </select>
+        <button id="btnCode" class="btn-primary">📖 Comparar Código</button>
+      </div>
+      <div class="code-comparison">
+        <div class="code-column">
+          <div class="code-header code-header-vulnerable">
+            <span class="icon">⚠️</span> Implementación VULNERABLE
+          </div>
+          <pre id="codeVuln" class="code-display"></pre>
+        </div>
+        <div class="code-column">
+          <div class="code-header code-header-secure">
+            <span class="icon">✅</span> Implementación SEGURA
+          </div>
+          <pre id="codeSafe" class="code-display"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer-section">
+    <div class="footer-content">
+      <div class="footer-warning">
+        <span class="icon">⚠️</span>
+        <strong>Disclaimer:</strong> Este laboratorio es solo para fines educativos. 
+        Nunca realices pruebas de seguridad en sistemas sin autorización explícita.
+      </div>
+      <div class="footer-resources">
+        <h4>📚 Recursos Adicionales:</h4>
+        <ul class="resource-links">
+          <li>🔗 <a href="https://owasp.org/Top10/" target="_blank">OWASP Top 10</a></li>
+          <li>🔗 <a href="https://cheatsheetseries.owasp.org/" target="_blank">OWASP Cheat Sheet Series</a></li>
+          <li>🔗 <a href="https://portswigger.net/web-security" target="_blank">PortSwigger Web Security Academy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-signature">
+      Made with 💙 for security education | © 2025
+    </div>
+  </footer>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
