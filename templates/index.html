@@ -760,20 +760,7 @@ def api_safe_fetch():
   </section>
 
   <!-- Code Viewer Section -->
-  <section class="card vulnerability-card">
-    <div class="vuln-header">
-      <div>
-        <h2>🔬 Visor de Código Fuente</h2>
-        <div class="owasp-badges">
-          <span class="owasp-badge">OWASP A05:2021 - Security Misconfiguration</span>
-        </div>
-      </div>
-      <div class="info-tabs">
-        <button class="tab-btn active" onclick="switchTab('codeview', 'explain')">📖 Ver Explicación</button>
-        <button class="tab-btn" onclick="switchTab('codeview', 'code')">💻 Ver Código</button>
-      </div>
-    </div>
-    
+
     <div class="explanation-panel" id="codeviewExplain" style="display:none;">
       <div class="tab-content active" data-tab="explain">
         <div class="explanation-content">
@@ -859,31 +846,6 @@ def api_safe_code():
       </div>
     </div>
 
-    <div class="form-section">
-      <div class="code-selector">
-        <select id="codeFile" class="select-file">
-          <option value="app.py">📄 app.py - Backend principal</option>
-          <option value="templates/index.html">🌐 templates/index.html - Frontend</option>
-          <option value="static/app.js">⚙️ static/app.js - JavaScript</option>
-          <option value="static/styles.css">🎨 static/styles.css - Estilos</option>
-        </select>
-        <button id="btnCode" class="btn-primary">📖 Comparar Código</button>
-      </div>
-      <div class="code-comparison">
-        <div class="code-column">
-          <div class="code-header code-header-vulnerable">
-            <span class="icon">⚠️</span> Implementación VULNERABLE
-          </div>
-          <pre id="codeVuln" class="code-display"></pre>
-        </div>
-        <div class="code-column">
-          <div class="code-header code-header-secure">
-            <span class="icon">✅</span> Implementación SEGURA
-          </div>
-          <pre id="codeSafe" class="code-display"></pre>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- Footer -->
